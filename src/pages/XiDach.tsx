@@ -1,105 +1,319 @@
-import { readMembers } from "@/utils/file.helper";
-import React, { useEffect, useState } from "react";
-
-interface Group {
-  label: string;
-  values: number[][];
-}
-
-const groups: Group[] = [
-  {
-    label: "Ai lam cái (user1)",
-    values: [
-      [0, -1, 1],
-      [0, -1, 1],
-      [0, -1, 0],
-    ],
-  },
-  {
-    label: "Ai lam cái (user2)",
-    values: [
-      [1, 0, 1],
-      [0, 0, 1],
-      [1, 0, 0],
-    ],
-  },
-  {
-    label: "Ai lam cái (user3)",
-    values: [
-      [1, 1, 0],
-      [1, -1, 0],
-      [1, -1, 0],
-    ],
-  },
-];
+import Node from "@/components/Node";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import React, { useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import type { Player, Round, Turn } from "@/interfaces";
 
 const XiDach = () => {
-  const [members, setMembers] = useState<string[]>();
+  const [players, setPlayers] = useState<Player[]>();
+  const [game, setGame] = useState<Turn[]>();
+  const [money, setMoney] = useState<number[][]>();
+  const flag = useRef<number[][]>([]);
 
   useEffect(() => {
-    readMembers().then((members) => setMembers(members));
+    fetchGame();
+    fetchPlayers();
   }, []);
 
-  console.log(members);
+  const modifyScore = async (round: Round) => {
+    let newValue;
 
-  if (!members) return <></>;
+    switch (round.value) {
+      case 1:
+        newValue = 0;
+        break;
+      case 0:
+        newValue = -1;
+        break;
+      case -1:
+        newValue = 2;
+        break;
+      default:
+        newValue = 1;
+    }
+
+    const { data, error } = await supabase
+      .from("round")
+      .update({ value: newValue })
+      .match({
+        turnid: round.turnid,
+        playerid: round.player!.playerid,
+        roundid: round.roundid,
+      });
+
+    if (error) console.error(error);
+    else {
+      setGame((prev) =>
+        prev
+          ? prev.map((turn) => {
+              if (turn.turnid == round.turnid)
+                return {
+                  ...turn,
+                  round: turn.round.map((myRound) =>
+                    myRound.roundid == round.roundid &&
+                    myRound.player!.playerid == round.player!.playerid
+                      ? { ...round, value: newValue }
+                      : myRound
+                  ),
+                };
+
+              return turn;
+            })
+          : []
+      );
+    }
+  };
+
+  const calcMoney = () => {
+    let myMoney: number[][] = [];
+
+    if (players) {
+      myMoney = Array.from({ length: players.length }, () =>
+        Array(players.length).fill(0)
+      );
+
+      flag.current = Array.from({ length: players.length }, () =>
+        Array(players.length).fill(0)
+      );
+    }
+
+    if (game) {
+      game.forEach((turn) =>
+        turn.round.forEach((round) => {
+          if (round.value != 2) {
+            const dealerId = turn.dealer.playerid - 1;
+            const playerId = round.player!.playerid - 1;
+
+            myMoney[dealerId][playerId] =
+              myMoney[dealerId][playerId] + round.value;
+          }
+        })
+      );
+    }
+
+    setMoney(myMoney);
+  };
+
+  const fetchPlayers = async () => {
+    const { data, error } = await supabase
+      .from("player")
+      .select("*")
+      .order("playerid", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching todos:", error);
+    } else {
+      setPlayers(data);
+    }
+  };
+
+  const fetchGame = async () => {
+    const { data, error } = await supabase
+      .from("turn")
+      .select(
+        `
+      turnid,
+      dealer:dealerid (
+        playerid,
+        name
+      ),
+      round (
+        turnid,
+        roundid,
+        player:playerid (
+          playerid,
+          name
+        ),
+        value
+      )
+    `
+      )
+      .order("turnid", { ascending: true }) // sort parent table
+      .order("playerid", { referencedTable: "round", ascending: true }); // sort child table
+
+    if (error) {
+      console.error("Error fetching todos:", error);
+    } else {
+      console.log(data);
+      setGame(data as any);
+    }
+  };
+
+  const initNewTurn = async () => {
+    if (players) {
+      const newTurns = players.map((player) => {
+        return {
+          dealerid: player.playerid,
+        };
+      });
+
+      const { data: turns, error: turnErr } = await supabase
+        .from("turn")
+        .insert(newTurns)
+        .select();
+
+      if (turnErr) console.error(turnErr);
+      else {
+        const newRounds = [] as Round[];
+
+        turns.forEach((turn, index) => {
+          players.forEach((player) => {
+            newRounds.push({
+              turnid: turn.turnid,
+              playerid: player.playerid,
+              value: 2,
+              roundid: index + 1,
+            });
+          });
+        });
+
+        const { data, error } = await supabase
+          .from("round")
+          .insert(newRounds)
+          .select();
+        if (error) console.error(error);
+        else console.log(data);
+      }
+    }
+  };
+
+  if (!players || !game) return <></>;
 
   return (
-    <div className="grid grid-cols-4 auto-rows-min border border-gray-300 divide-x divide-gray-300 gap-1">
-      {/* Header Row */}
-      <div />
-      {members.map((member) => (
-        <div className="p-2 font-bold text-center">{member}</div>
-      ))}
+    <>
+      <div
+        className={`grid grid-cols-${
+          players.length + 2
+        } auto-rows-min border border-gray-300 divide-x divide-gray-300 gap-1`}
+      >
+        {/* Header Row */}
+        <div />
+        {players.map((player) => (
+          <div className="p-2 font-bold text-center">{player.name}</div>
+        ))}
+        <div className="p-2 font-bold text-center"></div>
+        <div
+          className={`col-span-${players.length + 2} border-t border-gray-300`}
+        />
+        {/* Data Rows */}
+        {game.map((turn, gi) => {
+          const myRecord: Record<string, Round[]> = {};
 
-      {/* Data Rows */}
-      {groups.map((group, gi) => (
-        <React.Fragment key={gi}>
-          {/* Label cell spanning rows */}
-          <div className="font-semibold bg-gray-50 row-span-3">
-            {group.label}
-          </div>
+          turn.round.forEach((round) => {
+            const key = String(round.roundid);
+            if (!myRecord[key]) myRecord[key] = [];
+            myRecord[key].push(round);
+          });
+
+          const rounds = Object.values(myRecord);
+
+          return (
+            <React.Fragment key={gi}>
+              {/* dealer cell spanning rows */}
+              <div className="font-bold text-2xl bg-gray-50 row-span-2">
+                {turn.dealer.name}
+              </div>
+
+              {/* Value cells for each row and column */}
+              {rounds.map((row, ri) => (
+                <>
+                  {row.map((round, ci) => (
+                    <Node
+                      val={round.value}
+                      key={`${gi}-${ri}-${ci}`}
+                      isSamePlayer={gi % players.length == ci}
+                      modifyScore={() => {
+                        modifyScore(round);
+                      }}
+                    ></Node>
+                  ))}
+                  <div>Lock</div>
+                </>
+              ))}
+              {gi < game.length - 1 && (
+                <div
+                  className={`col-span-${
+                    players.length + 2
+                  } border-t border-gray-300`}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+        <div
+          className={`col-span-${players.length + 2} border-t border-gray-300`}
+        />
+        <React.Fragment key={"new"}>
+          {/* dealer cell spanning rows */}
+          <button
+            className="font-bold text-2xl bg-gray-50 row-span-3 min-h-[10rem] cursor-pointer"
+            onClick={async () => {
+              await initNewTurn();
+              await fetchGame();
+            }}
+          >
+            Repeat
+          </button>
 
           {/* Value cells for each row and column */}
-          {group.values.map((row, ri) =>
-            row.map((val, ci) => {
-              switch (val) {
-                case 1:
-                  return (
-                    <div
-                      key={`${gi}-${ri}-${ci}`}
-                      className="px-2 py-4 text-center text-xl bg-green-600"
-                    >
-                      Ăn
-                    </div>
-                  );
-                case -1:
-                  return (
-                    <div
-                      key={`${gi}-${ri}-${ci}`}
-                      className="px-2 py-4 text-center text-xl bg-red-600"
-                    >
-                      Thua
-                    </div>
-                  );
-                default:
-                  return (
-                    <div
-                      key={`${gi}-${ri}-${ci}`}
-                      className="px-2 py-4 text-center text-xl  bg-gray-600"
-                    >
-                      Hòa
-                    </div>
-                  );
-              }
-            })
-          )}
-          {gi < groups.length - 1 && (
-            <div className="col-span-4 border-t border-gray-300" />
-          )}
+          {[0, 0, 0].map((val, ci) => (
+            <Node
+              val={val}
+              key={`new-${ci}`}
+              isSamePlayer={true}
+              modifyScore={() => {
+                // modifyScore(round);
+              }}
+            ></Node>
+          ))}
         </React.Fragment>
-      ))}
-    </div>
+      </div>
+      <div className="mt-20 min-h-[50rem]">
+        <button onClick={() => calcMoney()}>Tính tiền lại</button>
+        {money &&
+          money.map((arr, i) => {
+            return arr.map((val, j) => {
+              if (i == j) return <></>;
+
+              if (flag.current[i][j] == 1) return <></>;
+
+              const res = val - money[j][i];
+
+              flag.current[j][i] = 1;
+
+              if (res > 0) {
+                return (
+                  <div>
+                    {players[j].name} nợ {players[i].name}{" "}
+                    {(res * 1_000).toLocaleString()} đồng
+                  </div>
+                );
+              }
+
+              if (res < 0)
+                return (
+                  <div>
+                    {players[i].name} nợ {players[j].name}{" "}
+                    {Math.abs(res * 1_000).toLocaleString()} đồng
+                  </div>
+                );
+
+              return (
+                <div>
+                  {players[i].name} huề vốn với {players[j].name}
+                </div>
+              );
+            });
+          })}
+      </div>
+    </>
   );
 };
 
