@@ -193,6 +193,10 @@ const XiDach = () => {
           players.length + 2
         } auto-rows-min border border-gray-300 divide-x divide-gray-300 gap-1`}
       >
+        <div
+          className="grid-cols-5 grid-cols-6 grid-cols-7 grid-cols-8 grid-cols-9 grid-cols-10 grid-cols-11 col-span-5 col-span-6 col-span-7 col-span-8 col-span-9 col-span-10 col-span-11"
+          hidden
+        ></div>
         {/* Header Row */}
         <div />
         {players.map((player) => (
