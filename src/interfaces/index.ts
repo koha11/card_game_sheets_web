@@ -17,4 +17,8 @@ export interface Player {
   name: string;
 }
 
-export interface Param {}
+export interface Param {
+  id: string;
+  money_value: number;
+  dealer_round: number;
+}

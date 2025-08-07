@@ -15,7 +15,7 @@ const Node = ({
   if (isSamePlayer || val == 2)
     return (
       <div
-        className="px-2 py-4 text-center text-xl"
+        className="px-2 py-8 text-center border-2"
         onClick={() => {
           if (!isSamePlayer) modifyScore();
         }}
@@ -26,29 +26,23 @@ const Node = ({
     case 1:
       return (
         <div
-          className="px-2 py-4 text-center text-xl bg-green-600 cursor-pointer"
+          className="px-2 py-8 text-center bg-green-600 cursor-pointer"
           onClick={() => modifyScore()}
-        >
-          Ăn
-        </div>
+        ></div>
       );
     case -1:
       return (
         <div
-          className="px-2 py-4 text-center text-xl bg-red-600 cursor-pointer"
+          className="px-2 py-8 text-center bg-red-600 cursor-pointer"
           onClick={() => modifyScore()}
-        >
-          Thua
-        </div>
+        ></div>
       );
     default:
       return (
         <div
-          className="px-2 py-4 text-center text-xl  bg-gray-600 cursor-pointer"
+          className="px-2 py-8 text-center  bg-gray-600 cursor-pointer"
           onClick={() => modifyScore()}
-        >
-          Hòa
-        </div>
+        ></div>
       );
   }
 };

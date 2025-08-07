@@ -9,17 +9,26 @@ import {
 } from "@/components/ui/dialog";
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import type { Player, Round, Turn } from "@/interfaces";
+import type { Param, Player, Round, Turn } from "@/interfaces";
 
 const XiDach = () => {
   const [players, setPlayers] = useState<Player[]>();
   const [game, setGame] = useState<Turn[]>();
   const [money, setMoney] = useState<number[][]>();
+  const [param, setParam] = useState<Param>();
+  const [lock, setLock] = useState<
+    {
+      turnid: number;
+      roundid: number;
+      isLock: boolean;
+    }[]
+  >([]);
   const flag = useRef<number[][]>([]);
 
   useEffect(() => {
     fetchGame();
     fetchPlayers();
+    fetchParam();
   }, []);
 
   const modifyScore = async (round: Round) => {
@@ -146,8 +155,19 @@ const XiDach = () => {
     }
   };
 
+  const fetchParam = async () => {
+    const { data, error } = await supabase.from("param").select("*");
+
+    if (error) {
+      console.error("Error fetching todos:", error);
+    } else {
+      console.log(data);
+      setParam(data[0] as any);
+    }
+  };
+
   const initNewTurn = async () => {
-    if (players) {
+    if (players && param) {
       const newTurns = players.map((player) => {
         return {
           dealerid: player.playerid,
@@ -163,15 +183,20 @@ const XiDach = () => {
       else {
         const newRounds = [] as Round[];
 
-        turns.forEach((turn, index) => {
-          players.forEach((player) => {
-            newRounds.push({
-              turnid: turn.turnid,
-              playerid: player.playerid,
-              value: 2,
-              roundid: index + 1,
+        turns.forEach((turn) => {
+          let i = 1;
+
+          while (i <= param.dealer_round) {
+            players.forEach((player) => {
+              newRounds.push({
+                turnid: turn.turnid,
+                playerid: player.playerid,
+                value: 2,
+                roundid: i,
+              });
             });
-          });
+            ++i;
+          }
         });
 
         const { data, error } = await supabase
@@ -184,7 +209,17 @@ const XiDach = () => {
     }
   };
 
-  if (!players || !game) return <></>;
+  const rest = async () => {
+    const { data, error } = await supabase
+      .from("turn")
+      .delete()
+      .neq("turnid", 0);
+    if (error) console.error(error);
+    else console.log(data);
+    await fetchGame();
+  };
+
+  if (!players || !game || !param) return <></>;
 
   return (
     <>
@@ -194,7 +229,9 @@ const XiDach = () => {
         } auto-rows-min border border-gray-300 divide-x divide-gray-300 gap-1`}
       >
         <div
-          className="grid-cols-5 grid-cols-6 grid-cols-7 grid-cols-8 grid-cols-9 grid-cols-10 grid-cols-11 col-span-5 col-span-6 col-span-7 col-span-8 col-span-9 col-span-10 col-span-11"
+          className={`grid-cols-5 grid-cols-6 grid-cols-7 grid-cols-8 grid-cols-9 
+            grid-cols-10 grid-cols-11 col-span-5 col-span-6 col-span-7 col-span-8 
+            col-span-9 col-span-10 col-span-11 row-span-3 row-span-4 row-span-5`}
           hidden
         ></div>
         {/* Header Row */}
@@ -221,7 +258,9 @@ const XiDach = () => {
           return (
             <React.Fragment key={gi}>
               {/* dealer cell spanning rows */}
-              <div className="font-bold text-2xl bg-gray-50 row-span-2">
+              <div
+                className={`font-bold text-2xl bg-gray-50 row-span-${param.dealer_round}`}
+              >
                 {turn.dealer.name}
               </div>
 
@@ -234,11 +273,57 @@ const XiDach = () => {
                       key={`${gi}-${ri}-${ci}`}
                       isSamePlayer={gi % players.length == ci}
                       modifyScore={() => {
-                        modifyScore(round);
+                        const myLock = lock.find(
+                          (myTurn) =>
+                            myTurn.turnid == turn.turnid && myTurn.roundid == ri
+                        );
+
+                        if (myLock && !myLock.isLock) modifyScore(round);
                       }}
                     ></Node>
                   ))}
-                  <div>Lock</div>
+                  <div
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setLock((prev) => {
+                        if (prev) {
+                          const current = prev.find(
+                            (myTurn) =>
+                              myTurn.turnid == turn.turnid &&
+                              myTurn.roundid == ri
+                          );
+
+                          if (current) {
+                            return prev.map((myTurn) => {
+                              if (
+                                myTurn.turnid == turn.turnid &&
+                                myTurn.roundid == ri
+                              )
+                                return { ...myTurn, isLock: !myTurn.isLock };
+
+                              return myTurn;
+                            });
+                          }
+                        }
+
+                        return [
+                          { turnid: turn.turnid, roundid: ri, isLock: true },
+                        ];
+                      });
+                    }}
+                  >
+                    {lock.find(
+                      (myTurn) =>
+                        myTurn.turnid == turn.turnid && myTurn.roundid == ri
+                    )
+                      ? lock.find(
+                          (myTurn) =>
+                            myTurn.turnid == turn.turnid && myTurn.roundid == ri
+                        )?.isLock
+                        ? "click to unlock"
+                        : "click to lock"
+                      : "click to lock"}
+                  </div>
                 </>
               ))}
               {gi < game.length - 1 && (
@@ -251,13 +336,15 @@ const XiDach = () => {
             </React.Fragment>
           );
         })}
+
         <div
           className={`col-span-${players.length + 2} border-t border-gray-300`}
         />
+
         <React.Fragment key={"new"}>
           {/* dealer cell spanning rows */}
           <button
-            className="font-bold text-2xl bg-gray-50 row-span-3 min-h-[10rem] cursor-pointer"
+            className={`font-bold text-2xl bg-gray-50 row-span-${param.dealer_round} min-h-[10rem] cursor-pointer`}
             onClick={async () => {
               await initNewTurn();
               await fetchGame();
@@ -267,7 +354,7 @@ const XiDach = () => {
           </button>
 
           {/* Value cells for each row and column */}
-          {[0, 0, 0].map((val, ci) => (
+          {/* {[0, 0, 0].map((val, ci) => (
             <Node
               val={val}
               key={`new-${ci}`}
@@ -276,12 +363,13 @@ const XiDach = () => {
                 // modifyScore(round);
               }}
             ></Node>
-          ))}
+          ))} */}
         </React.Fragment>
       </div>
-      <div className="mt-20 min-h-[50rem]">
+      <div className="mt-20 min-h-[50rem] relative">
         <button onClick={() => calcMoney()}>Tính tiền lại</button>
         {money &&
+          param &&
           money.map((arr, i) => {
             return arr.map((val, j) => {
               if (i == j) return <></>;
@@ -296,7 +384,7 @@ const XiDach = () => {
                 return (
                   <div>
                     {players[j].name} nợ {players[i].name}{" "}
-                    {(res * 1_000).toLocaleString()} đồng
+                    {(res * param.money_value).toLocaleString()} đồng
                   </div>
                 );
               }
@@ -305,7 +393,7 @@ const XiDach = () => {
                 return (
                   <div>
                     {players[i].name} nợ {players[j].name}{" "}
-                    {Math.abs(res * 1_000).toLocaleString()} đồng
+                    {Math.abs(res * param.money_value).toLocaleString()} đồng
                   </div>
                 );
 
@@ -316,6 +404,14 @@ const XiDach = () => {
               );
             });
           })}
+        <button
+          className="absolute bottom-0 right-0"
+          onClick={async () => {
+            await rest();
+          }}
+        >
+          rest
+        </button>
       </div>
     </>
   );
