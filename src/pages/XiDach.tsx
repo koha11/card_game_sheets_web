@@ -226,7 +226,7 @@ const XiDach = () => {
       <div
         className={`grid grid-cols-${
           players.length + 2
-        } auto-rows-min sticky top-0 bg-white shadow-2xl`}
+        } auto-rows-min sticky top-0 bg-white shadow-xl gap-1`}
       >
         {/* Header Row */}
         <div />
