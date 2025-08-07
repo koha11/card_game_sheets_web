@@ -278,7 +278,8 @@ const XiDach = () => {
                             myTurn.turnid == turn.turnid && myTurn.roundid == ri
                         );
 
-                        if (myLock && !myLock.isLock) modifyScore(round);
+                        if (!myLock || (myLock && !myLock.isLock))
+                          modifyScore(round);
                       }}
                     ></Node>
                   ))}
