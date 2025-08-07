@@ -222,7 +222,19 @@ const XiDach = () => {
   if (!players || !game || !param) return <></>;
 
   return (
-    <>
+    <div className="">
+      <div
+        className={`grid grid-cols-${
+          players.length + 2
+        } auto-rows-min sticky top-0 bg-white shadow-2xl`}
+      >
+        {/* Header Row */}
+        <div />
+        {players.map((player) => (
+          <div className="p-2 font-bold text-center">{player.name}</div>
+        ))}
+        <div className="p-2 font-bold text-center"></div>
+      </div>
       <div
         className={`grid grid-cols-${
           players.length + 2
@@ -234,15 +246,6 @@ const XiDach = () => {
             col-span-9 col-span-10 col-span-11 row-span-3 row-span-4 row-span-5`}
           hidden
         ></div>
-        {/* Header Row */}
-        <div />
-        {players.map((player) => (
-          <div className="p-2 font-bold text-center">{player.name}</div>
-        ))}
-        <div className="p-2 font-bold text-center"></div>
-        <div
-          className={`col-span-${players.length + 2} border-t border-gray-300`}
-        />
         {/* Data Rows */}
         {game.map((turn, gi) => {
           const myRecord: Record<string, Round[]> = {};
@@ -414,7 +417,7 @@ const XiDach = () => {
           rest
         </button>
       </div>
-    </>
+    </div>
   );
 };
 
